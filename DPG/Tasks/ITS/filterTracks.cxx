@@ -300,7 +300,7 @@ struct FilterTracks {
         for (auto mcpartdaughtIdx : indxDaughers) {
           auto mcPartDaught = mcParticles.rawIteratorAt(mcpartdaughtIdx);
           double eta = std::abs(mcPartDaught.eta());
-          if ((eta) > etamax){
+          if ((eta) > etamax) {
             etamax = eta;
           }
         }
