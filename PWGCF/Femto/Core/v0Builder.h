@@ -388,12 +388,13 @@ class V0Builder
       if (!mV0Selection.passesAllRequiredSelections()) {
         continue;
       }
+
+      collisionBuilder.template fillCollision<system>(collisionProducts, col);
+
       // cleaner, but without ITS pid: auto posDaughter = v0.template posTrack_as<T7>();
       auto posDaughter = tracksWithItsPid.iteratorAt(v0.posTrackId() - tracksWithItsPid.offset());
       // cleaner, but without ITS pid: auto negDaughter = v0.template negTrack_as<T7>();
       auto negDaughter = tracksWithItsPid.iteratorAt(v0.negTrackId() - tracksWithItsPid.offset());
-
-      collisionBuilder.template fillCollision<system>(collisionProducts, col);
 
       posDaughterIndex = trackBuilder.template getDaughterIndex<modes::Track::kV0Daughter>(posDaughter, trackProducts, collisionProducts);
       negDaughterIndex = trackBuilder.template getDaughterIndex<modes::Track::kV0Daughter>(negDaughter, trackProducts, collisionProducts);
@@ -554,10 +555,14 @@ class V0BuilderDerivedToDerived
   {
     mLimitLambda = config.limitLambda.value;
     mLimitK0short = config.limitK0short.value;
+
+    if (mLimitLambda == 0 && mLimitK0short == 0) {
+      LOG(fatal) << "Both lambda limit and k0short limit are 0. Breaking...";
+    }
   }
 
   template <typename T1, typename T2, typename T3, typename T4>
-  bool collisionHasTooFewLambdas(T1& col, T2& /*lambdaTable*/, T3& partitionLambda, T4& cache)
+  bool collisionHasTooFewLambdas(T1 const& col, T2 const& /*lambdaTable*/, T3& partitionLambda, T4& cache)
   {
     auto lambdaSlice = partitionLambda->sliceByCached(o2::aod::femtobase::stored::fColId, col.globalIndex(), cache);
     if (lambdaSlice.size() >= mLimitLambda) {
@@ -567,7 +572,7 @@ class V0BuilderDerivedToDerived
   }
 
   template <typename T1, typename T2, typename T3, typename T4>
-  bool collisionHasTooFewK0shorts(T1& col, T2& /*k0shortTable*/, T3& partitionK0short, T4& cache)
+  bool collisionHasTooFewK0shorts(T1 const& col, T2 const& /*k0shortTable*/, T3& partitionK0short, T4& cache)
   {
     auto k0shortSlice = partitionK0short->sliceByCached(o2::aod::femtobase::stored::fColId, col.globalIndex(), cache);
     if (k0shortSlice.size() >= mLimitK0short) {
@@ -577,14 +582,16 @@ class V0BuilderDerivedToDerived
   }
 
   template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9>
-  void processLambdas(T1& col, T2& /*lambdaTable*/, T3& /*oldTrackTable*/, T4& partitionLambda, T5& trackBuilder, T6& cache, T7& newLambdaTable, T8& newTrackTable, T9& newCollisionTable)
+  void processLambdas(T1 const& col, T2 const& /*lambdaTable*/, T3 const& oldTrackTable, T4& partitionLambda, T5& trackBuilder, T6& cache, T7& newLambdaTable, T8& newTrackTable, T9& newCollisionTable)
   {
     auto lambdaSlice = partitionLambda->sliceByCached(o2::aod::femtobase::stored::fColId, col.globalIndex(), cache);
 
     for (auto const& lambda : lambdaSlice) {
 
-      auto posDaughter = lambda.template posDau_as<T3>();
-      auto negDaughter = lambda.template negDau_as<T3>();
+      // auto posDaughter = lambda.template posDau_as<T3>();
+      // auto negDaughter = lambda.template negDau_as<T3>();
+      auto posDaughter = oldTrackTable.rawIteratorAt(lambda.posDauId() - oldTrackTable.offset());
+      auto negDaughter = oldTrackTable.rawIteratorAt(lambda.negDauId() - oldTrackTable.offset());
 
       int posDaughterIndex = trackBuilder.getDaughterIndex(posDaughter, newTrackTable, newCollisionTable);
       int negDaughterIndex = trackBuilder.getDaughterIndex(negDaughter, newTrackTable, newCollisionTable);
@@ -601,14 +608,16 @@ class V0BuilderDerivedToDerived
   }
 
   template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9>
-  void processK0shorts(T1& col, T2& /*k0shortTable*/, T3& /*oldTrackTable*/, T4& partitionK0short, T5& trackBuilder, T6& cache, T7& newK0shortTable, T8& newTrackTable, T9& newCollisionTable)
+  void processK0shorts(T1 const& col, T2 const& /*k0shortTable*/, T3 const& oldTrackTable, T4& partitionK0short, T5& trackBuilder, T6& cache, T7& newK0shortTable, T8& newTrackTable, T9& newCollisionTable)
   {
     auto k0shortSlice = partitionK0short->sliceByCached(o2::aod::femtobase::stored::fColId, col.globalIndex(), cache);
 
     for (auto const& k0short : k0shortSlice) {
 
-      auto posDaughter = k0short.template posDau_as<T3>();
-      auto negDaughter = k0short.template negDau_as<T3>();
+      // auto posDaughter = k0short.template posDau_as<T3>();
+      // auto negDaughter = k0short.template negDau_as<T3>();
+      auto posDaughter = oldTrackTable.rawIteratorAt(k0short.posDauId() - oldTrackTable.offset());
+      auto negDaughter = oldTrackTable.rawIteratorAt(k0short.negDauId() - oldTrackTable.offset());
 
       int posDaughterIndex = trackBuilder.getDaughterIndex(posDaughter, newTrackTable, newCollisionTable);
       int negDaughterIndex = trackBuilder.getDaughterIndex(negDaughter, newTrackTable, newCollisionTable);

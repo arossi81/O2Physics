@@ -529,7 +529,24 @@ DECLARE_SOA_TABLE_STAGED_VERSIONED(FSigmas_001, "FSIGMA", 1,
                                    femtobase::dynamic::Py<femtobase::stored::SignedPt, femtobase::stored::Phi>,
                                    femtobase::dynamic::Pz<femtobase::stored::SignedPt, femtobase::stored::Eta>,
                                    femtobase::dynamic::Theta<femtobase::stored::Eta>);
-using FSigmas = FSigmas_001;
+
+// table for basic sigma information
+DECLARE_SOA_TABLE_STAGED_VERSIONED(FSigmas_002, "FSIGMA", 2,
+                                   o2::soa::Index<>,
+                                   femtobase::stored::FColId, // use sign to differentiate between sigma minus (-1) and anti sigma minus (+1)
+                                   femtobase::stored::SignedPt,
+                                   femtobase::stored::Eta,
+                                   femtobase::stored::Phi,
+                                   femtobase::stored::Mass,
+                                   femtokinks::ChaDauId,
+                                   femtobase::dynamic::Sign<femtobase::stored::SignedPt>,
+                                   femtobase::dynamic::Pt<femtobase::stored::SignedPt>,
+                                   femtobase::dynamic::P<femtobase::stored::SignedPt, femtobase::stored::Eta>,
+                                   femtobase::dynamic::Px<femtobase::stored::SignedPt, femtobase::stored::Phi>,
+                                   femtobase::dynamic::Py<femtobase::stored::SignedPt, femtobase::stored::Phi>,
+                                   femtobase::dynamic::Pz<femtobase::stored::SignedPt, femtobase::stored::Eta>,
+                                   femtobase::dynamic::Theta<femtobase::stored::Eta>);
+using FSigmas = FSigmas_002;
 
 DECLARE_SOA_TABLE_STAGED_VERSIONED(FSigmaMasks_001, "FSIGMAMASKS", 1,
                                    femtokinks::Mask);
@@ -756,6 +773,16 @@ DECLARE_SOA_TABLE(FSigmaLabels, "AOD", "FSIGMALABEL",
                   femtolabels::FMcPartMothId);
 
 DECLARE_SOA_TABLE(FSigmaPlusLabels, "AOD", "FSIGMAPLUSLABEL",
+                  femtolabels::FMcParticleId,
+                  femtolabels::FMcMotherId,
+                  femtolabels::FMcPartMothId);
+
+DECLARE_SOA_TABLE(FXiLabels, "AOD", "FXILABEL",
+                  femtolabels::FMcParticleId,
+                  femtolabels::FMcMotherId,
+                  femtolabels::FMcPartMothId);
+
+DECLARE_SOA_TABLE(FOmegaLabels, "AOD", "FOMEGALABEL",
                   femtolabels::FMcParticleId,
                   femtolabels::FMcMotherId,
                   femtolabels::FMcPartMothId);

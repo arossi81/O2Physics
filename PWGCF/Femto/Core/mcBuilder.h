@@ -40,6 +40,7 @@ namespace mcbuilder
 struct ConfMc : o2::framework::ConfigurableGroup {
   std::string prefix = std::string("MonteCarlo");
   o2::framework::Configurable<bool> passThrough{"passThrough", false, "Passthrough all MC collisions and particles"};
+  o2::framework::Configurable<bool> findLastPartonicMother{"findLastPartonicMother", true, "If true, the partonic mother will be the first parton directly after the initial collision. If false, the partonic mother will be the last parton before hadronization"};
 };
 
 struct McBuilderProducts : o2::framework::ProducesGroup {
@@ -54,6 +55,8 @@ struct McBuilderProducts : o2::framework::ProducesGroup {
   o2::framework::Produces<o2::aod::FK0shortLabels> producedK0shortLabels;
   o2::framework::Produces<o2::aod::FSigmaLabels> producedSigmaLabels;
   o2::framework::Produces<o2::aod::FSigmaPlusLabels> producedSigmaPlusLabels;
+  o2::framework::Produces<o2::aod::FXiLabels> producedXiLabels;
+  o2::framework::Produces<o2::aod::FOmegaLabels> producedOmegaLabels;
 };
 
 struct ConfMcTables : o2::framework::ConfigurableGroup {
@@ -69,6 +72,8 @@ struct ConfMcTables : o2::framework::ConfigurableGroup {
   o2::framework::Configurable<int> producedK0shortLabels{"producedK0shortLabels", -1, "Produce k0short labels (-1: auto; 0 off; 1 on)"};
   o2::framework::Configurable<int> producedSigmaLabels{"producedSigmaLabels", -1, "Produce k0short labels (-1: auto; 0 off; 1 on)"};
   o2::framework::Configurable<int> producedSigmaPlusLabels{"producedSigmaPlusLabels", -1, "Produce k0short labels (-1: auto; 0 off; 1 on)"};
+  o2::framework::Configurable<int> producedXiLabels{"producedXiLabels", -1, "Produce xi labels (-1: auto; 0 off; 1 on)"};
+  o2::framework::Configurable<int> producedOmegaLabels{"producedOmegaLabels", -1, "Produce omega labels (-1: auto; 0 off; 1 on)"};
 };
 
 class McBuilder
@@ -93,8 +98,15 @@ class McBuilder
     mProduceK0shortLabels = utils::enableTable("FK0shortLabels", table.producedK0shortLabels.value, initContext);
     mProduceSigmaLabels = utils::enableTable("FSigmaLabels", table.producedSigmaLabels.value, initContext);
     mProduceSigmaPlusLabels = utils::enableTable("FSigmaPlusLabels", table.producedSigmaPlusLabels.value, initContext);
+    mProduceXiLabels = utils::enableTable("FXiLabels", table.producedXiLabels.value, initContext);
+    mProduceOmegaLabels = utils::enableTable("FOmegaLabels", table.producedOmegaLabels.value, initContext);
 
-    if (mProduceMcCollisions || mProduceMcParticles || mProduceMcMothers || mProduceMcPartonicMothers || mProduceCollisionLabels || mProduceTrackLabels || mProduceLambdaLabels || mProduceK0shortLabels) {
+    if (mProduceMcCollisions || mProduceCollisionLabels ||
+        mProduceMcParticles || mProduceMcMothers || mProduceMcPartonicMothers ||
+        mProduceTrackLabels ||
+        mProduceLambdaLabels || mProduceK0shortLabels ||
+        mProduceSigmaLabels || mProduceSigmaPlusLabels ||
+        mProduceXiLabels || mProduceOmegaLabels) {
       mFillAnyTable = true;
     } else {
       LOG(info) << "No tables configured...";
@@ -102,6 +114,7 @@ class McBuilder
       return;
     }
     mPassThrough = config.passThrough.value;
+    mFindLastPartonicMother = config.findLastPartonicMother.value;
     LOG(info) << "Initialization done...";
   }
 
@@ -125,7 +138,7 @@ class McBuilder
       // Add label
       mcProducts.producedCollisionLabels(it->second);
     } else {
-      // Case: No MC collision associated
+      // If no MC collision associated, fill empty label
       mcProducts.producedCollisionLabels(-1);
     }
   }
@@ -178,14 +191,39 @@ class McBuilder
     fillMcLabelGeneric<system>(col, mcCols, sigmaPlusDaughter, mcParticles, mcProducts, [](auto& prod, int64_t p, int64_t m, int64_t pm) { prod.producedSigmaPlusLabels(p, m, pm); }, true);
   }
 
+  template <modes::System system, typename T1, typename T2, typename T3, typename T4, typename T5>
+  void fillMcXiWithLabel(T1 const& col, T2 const& mcCols, T3 const& xi, T4 const& mcParticles, T5& mcProducts)
+  {
+    if (!mProduceXiLabels) {
+      mcProducts.producedXiLabels(-1, -1, -1);
+      return;
+    }
+    fillMcLabelGeneric<system>(col, mcCols, xi, mcParticles, mcProducts, [](auto& prod, int64_t p, int64_t m, int64_t pm) { prod.producedXiLabels(p, m, pm); });
+  }
+
+  template <modes::System system, typename T1, typename T2, typename T3, typename T4, typename T5>
+  void fillMcOmegaWithLabel(T1 const& col, T2 const& mcCols, T3 const& omega, T4 const& mcParticles, T5& mcProducts)
+  {
+    if (!mProduceOmegaLabels) {
+      mcProducts.producedOmegaLabels(-1, -1, -1);
+      return;
+    }
+    fillMcLabelGeneric<system>(col, mcCols, omega, mcParticles, mcProducts, [](auto& prod, int64_t p, int64_t m, int64_t pm) { prod.producedOmegaLabels(p, m, pm); });
+  }
+
   bool fillAnyTable() const { return mFillAnyTable; }
 
-  void reset()
+  template <typename T1, typename T2>
+  void reset(T1 const& mcCollisions, T2 const& mcParticles)
   {
     mCollisionMap.clear();
+    mCollisionMap.reserve(mcCollisions.size());
     mMcParticleMap.clear();
+    mMcParticleMap.reserve(mcParticles.size());
     mMcMotherMap.clear();
+    mMcMotherMap.reserve(mcParticles.size());
     mMcPartonicMotherMap.clear();
+    mMcPartonicMotherMap.reserve(mcParticles.size());
   }
 
  private:
@@ -304,7 +342,12 @@ class McBuilder
 
     // Partonic mother
     int64_t mcPartonicMotherRow = -1;
-    auto mcPartonicMotherIndex = this->findFirstPartonicMother(mcParticle, mcParticles);
+    int64_t mcPartonicMotherIndex = -1;
+    if (mFindLastPartonicMother) {
+      mcPartonicMotherIndex = this->findLastPartonicMother(mcParticle, mcParticles);
+    } else {
+      mcPartonicMotherIndex = this->findFirstPartonicMother(mcParticle, mcParticles);
+    }
     if (mcPartonicMotherIndex >= 0) {
       auto itPM = mMcPartonicMotherMap.find(mcPartonicMotherIndex);
       if (itPM != mMcPartonicMotherMap.end()) {
@@ -321,14 +364,12 @@ class McBuilder
   }
 
   template <typename T1, typename T2>
-  int findFirstPartonicMother(const T1& mcParticle, const T2& mcParticles)
+  int64_t findFirstPartonicMother(const T1& mcParticle, const T2& mcParticles)
   {
     if (!mcParticle.has_mothers()) {
       return -1;
     }
-
     auto motherIds = mcParticle.mothersIds();
-
     // adapted these checks from MCUtils in PWGEM
     const int defaultMotherSize = 2;
     std::vector<int> allMotherIds;
@@ -343,32 +384,69 @@ class McBuilder
       for (const int& id : motherIds)
         allMotherIds.push_back(id);
     }
-
     // Loop over all mothers
     for (const int& i : allMotherIds) {
 
       if (i < 0 || i >= mcParticles.size())
         continue;
-
       const auto& mother = mcParticles.iteratorAt(i);
       int pdgAbs = std::abs(mother.pdgCode());
-
       // Is it a parton? (quark or gluon)
       if (pdgAbs <= PDG_t::kTop || pdgAbs == PDG_t::kGluon) {
         return i; // Found a parton → return index
       }
-
       // Recurse upward
-      int found = this->findFirstPartonicMother(mother, mcParticles);
+      int64_t found = this->findFirstPartonicMother(mother, mcParticles);
       if (found != -1)
         return found;
     }
-
     // No partonic ancestor found
     return -1;
   }
 
+  template <typename T1, typename T2>
+  int64_t findLastPartonicMother(const T1& mcParticle, const T2& mcParticles)
+  {
+    int64_t lastPartonIndex = -1;
+    int64_t currentIndex = mcParticle.globalIndex();
+    while (currentIndex >= 0 && currentIndex < mcParticles.size()) {
+      const auto& current = mcParticles.iteratorAt(currentIndex);
+      if (!current.has_mothers())
+        break;
+      auto motherIds = current.mothersIds();
+      int nextIndex = -1;
+      const int defaultMotherSize = 2;
+      if (motherIds.size() == defaultMotherSize && motherIds[1] > motherIds[0]) {
+        nextIndex = motherIds[0];
+      } else {
+        for (const int& id : motherIds) {
+          if (id >= 0 && id < mcParticles.size()) {
+            nextIndex = id;
+            break;
+          }
+        }
+      }
+      if (nextIndex < 0 || nextIndex >= mcParticles.size())
+        break;
+      const auto& mother = mcParticles.iteratorAt(nextIndex);
+      int pdgAbs = std::abs(mother.pdgCode());
+      int status = std::abs(o2::mcgenstatus::getGenStatusCode(mother.statusCode()));
+      bool isParton = (pdgAbs <= PDG_t::kTop || pdgAbs == PDG_t::kGluon);
+      const int isBeamParticleLowerLimit = 11;
+      const int isBeamParticleUpperLimit = 19;
+      bool isBeam = (status >= isBeamParticleLowerLimit && status <= isBeamParticleUpperLimit);
+      if (isBeam)
+        return lastPartonIndex;
+      if (isParton)
+        lastPartonIndex = nextIndex;
+
+      currentIndex = nextIndex;
+    }
+    return -1;
+  }
+
   bool mPassThrough = false;
+  bool mFindLastPartonicMother = false;
   bool mFillAnyTable = false;
   bool mProduceMcCollisions = false;
   bool mProduceMcParticles = false;
@@ -381,6 +459,8 @@ class McBuilder
   bool mProduceK0shortLabels = false;
   bool mProduceSigmaLabels = false;
   bool mProduceSigmaPlusLabels = false;
+  bool mProduceXiLabels = false;
+  bool mProduceOmegaLabels = false;
 
   std::unordered_map<int64_t, int64_t> mCollisionMap;
 
